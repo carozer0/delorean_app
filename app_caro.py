@@ -2,11 +2,12 @@ import os
 import streamlit as st
 import requests
 from PIL import Image
+from io import BytesIO
 
 st.set_page_config(layout="wide")
 st.title("🎨 DeLorean Art Program ")
 
-# Base API URL selon l’environnement
+# Détection de l’URL d'API
 if 'API_URI' in os.environ:
     BASE_URI = st.secrets[os.environ.get('API_URI')]
 else:
@@ -18,7 +19,7 @@ url = BASE_URI + 'upload_image'
 uploaded_file = st.file_uploader("Who’s ready to hop in the DeLorean?", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    image = Image.open(uploaded_file)
+    image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Ready for time travel", width=300)
 
     if st.button("🔍 Fire up the DeLorean! ⚡🕒🚗"):
@@ -31,6 +32,18 @@ if uploaded_file:
             st.success("Great Scott!")
 
             neighbors = data["neighbors"]
+            input_coords = data.get("input_photo_coordinates", [])
+            cropped_input_face = None
+
+            # 🧠 Extraire le visage croppé de la photo utilisateur
+            if input_coords and len(input_coords) == 4:
+                x1, y1, x2, y2 = input_coords
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(image.width, x2), min(image.height, y2)
+
+                if x2 > x1 and y2 > y1:
+                    cropped_input_face = image.crop((x1, y1, x2, y2))
+
             st.markdown("🧑‍🎨 Here are your matches!")
 
             for i, match in enumerate(neighbors, start=1):
@@ -38,39 +51,62 @@ if uploaded_file:
                 col1, col2 = st.columns([1, 2])
 
                 with col1:
-                    # 👤 Visage extrait local
-                    face_path = match.get("painting_face_path")
-                    if face_path and os.path.exists(face_path):
-                        try:
-                            with open(face_path, "rb") as img_file:
-                                face_img = Image.open(img_file)
-                                st.image(face_img, caption="👤 Extracted face", width=300)
-                        except Exception as e:
-                            st.warning(f"Erreur chargement visage : {e}")
-                    else:
-                        st.text("❌ Visage non disponible")
-
-                    # 🎨 Tableau original local
-                    painting_path = match.get("original_painting_path")
-                    if painting_path and os.path.exists(painting_path):
-                        try:
-                            with open(painting_path, "rb") as img_file:
-                                painting_img = Image.open(img_file)
-                                st.image(painting_img, caption="🎨 Original painting", width=300)
-                        except Exception as e:
-                            st.warning(f"Erreur chargement peinture : {e}")
-                    else:
-                        st.text("❌ Tableau non disponible")
-
-                    # 🌐 Image WikiArt directe
                     image_url = match.get("original_painting_image_url")
-                    if image_url:
-                        st.image(image_url, caption="🖼️ Depuis WikiArt", width=300)
+                    face_data = match.get("face_coordinates", [])
+
+                    if image_url and face_data:
+                        try:
+                            x1, y1, x2, y2, w_img, h_img = face_data[0]
+
+                            response_img = requests.get(image_url)
+                            full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
+
+                            resized_img = full_img.resize((w_img, h_img))
+
+                            x1 = max(0, min(x1, w_img))
+                            x2 = max(0, min(x2, w_img))
+                            y1 = max(0, min(y1, h_img))
+                            y2 = max(0, min(y2, h_img))
+
+                            if x2 > x1 and y2 > y1:
+                                cropped_face = resized_img.crop((x1, y1, x2, y2))
+                                st.image(cropped_face, caption="🎨 Face from painting", width=300)
+                            else:
+                                st.warning("⚠️ Coordonnées invalides après clamp")
+
+                            st.image(resized_img, caption="🖼️ Original painting (resized)", width=300)
+
+                        except Exception as e:
+                            st.warning(f"Erreur image WikiArt : {e}")
+
                     else:
-                        st.text("❌ Image WikiArt non trouvée")
+                        # 🗂️ Cas local
+                        face_path = match.get("painting_face_path")
+                        painting_path = match.get("original_painting_path")
+
+                        if face_path and os.path.exists(face_path):
+                            try:
+                                with open(face_path, "rb") as f:
+                                    face_img = Image.open(f)
+                                    st.image(face_img, caption="🎨 Face from painting (local)", width=300)
+                            except Exception as e:
+                                st.warning(f"Erreur chargement visage local : {e}")
+
+                        if painting_path and os.path.exists(painting_path):
+                            try:
+                                with open(painting_path, "rb") as f:
+                                    painting_img = Image.open(f)
+                                    st.image(painting_img, caption="🖼️ Original painting (local)", width=300)
+                            except Exception as e:
+                                st.warning(f"Erreur chargement peinture locale : {e}")
+
+                    # 🧍‍♂️ Visage de la photo de départ
+                    if cropped_input_face:
+                        st.image(cropped_input_face, caption="👤 Your face (input)", width=300)
 
                 with col2:
                     st.markdown(f"**🎨 Titre :** *{match['original_painting_title']}*")
                     st.markdown(f"**👨‍🎨 Artiste :** {match['original_painting_artist']}")
-                    st.markdown(f"[🔗 Voir sur WikiArt]({match['original_painting_wikiart_link']})")
+                    if match.get("original_painting_wikiart_link"):
+                        st.markdown(f"[🔗 Voir sur WikiArt]({match['original_painting_wikiart_link']})")
                     st.write(f"📊 Similarité : {match['similarity']}")
