@@ -4,59 +4,61 @@ import requests
 from PIL import Image
 from io import BytesIO
 
+# 🌌 Style
 st.markdown(
-        """
+    """
     <style>
     .stAppx {
         background-color:  #173679 ;
     }
-
-      .stTitle {
-
+    .stTitle {
         background-color:  #ACB1D6 ;
     }
-
     </style>
     """,
-    unsafe_allow_html=True)
+    unsafe_allow_html=True
+)
+
+# 🎨 En-tête
 col1, col2 = st.columns([1, 1])
 
 with col1:
-        st.title("DeLorean Art 🎨")
-        st.markdown("#### Dive into history and discover yourself in its artistic works.")
+    st.title("DeLorean Art 🎨")
+    st.markdown("#### Dive into history and discover yourself in its artistic works.")
 
 with col2:
-        image = Image.open("img/DeloreanV.jpg")
-        st.image(image, use_container_width=True)
+    image = Image.open("img/DeloreanV.jpg")
+    st.image(image, use_container_width=True)
 
-
-#st.set_page_config(layout="wide")
-#st.title("🎨 DeLorean Art Program ")
-
-# Détection de l'URL d'API
-if 'API_URI' in os.environ:
-    BASE_URI = st.secrets[os.environ.get('API_URI')]
-else:
-    BASE_URI = st.secrets['cloud_api_uri']
-    BASE_URI = st.secrets['local_api_uri']
+BASE_URI = st.secrets.get('cloud_api_uri')
 
 BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
 url = BASE_URI + 'upload_image'
 
+# 📤 Upload
 uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Ready for time travel", width=300)
-    category = st.selectbox("Select Category",("full","modern_abstract","diverse","cubism","art_asiatique","realism_impressionism","renaissance_baroque","romanticism_art_nouveau","styles_recents"))
-    matches = st.selectbox("Pick matches:",("3","5","10"))
-    model = st.selectbox("Pick Model:",("512","ghost"))
 
+    category = st.selectbox("Select Category :", (
+        "full", "modern_abstract", "diverse", "cubism",
+        "art_asiatique", "realism_impressionism", "renaissance_baroque",
+        "romanticism_art_nouveau", "styles_recents"
+    ))
+
+    matches = st.selectbox("Pick matches :", ("3", "5", "10"))
+    model = st.selectbox("Pick Model :", ("512", "ghost"))
 
     if st.button("🔍 Fire up the DeLorean! ⚡🕒🚗"):
         with st.spinner("The flux capacitor is fluxing..."):
             files = {"img": uploaded_file.getvalue()}
-            response = requests.post(url, files={"img": files["img"]},data={"matches": matches,"model":model,"category":category })
+            response = requests.post(
+                url,
+                files={"img": files["img"]},
+                data={"matches": matches, "model": model, "category": category}
+            )
 
         if response.status_code == 200:
             data = response.json()
@@ -66,9 +68,9 @@ if uploaded_file:
             input_coords = data.get("input_photo_coordinates", [])
             cropped_input_face = None
 
-            # 🧠 Extraire le visage croppé de la photo utilisateur
+            # 🧠 Crop visage utilisateur
             if input_coords and len(input_coords) == 4:
-                x1, y1, x2, y2 = input_coords
+                x1, y1, x2, y2 = map(int, input_coords)
                 x1, y1 = max(0, x1), max(0, y1)
                 x2, y2 = min(image.width, x2), min(image.height, y2)
 
@@ -79,80 +81,60 @@ if uploaded_file:
 
             for i, match in enumerate(neighbors, start=1):
                 st.markdown(f"---\n### 🖼️ Match #{i}")
-                col1, col2, col3 = st.columns([1, 1 , 2])
+                col1, col2, col3 = st.columns([1, 1, 2])
 
                 with col1:
                     image_url = match.get("original_painting_image_url")
                     face_data = match.get("face_coordinates", [])
 
-
                     if image_url and face_data:
                         try:
-                            x1, y1, x2, y2, w_img, h_img = map(int,face_data[0])
+                            response_img = requests.get(image_url, timeout=5)
 
-                            response_img = requests.get(image_url)
-                            full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
+                            if response_img.status_code == 200:
+                                full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
+                                x1, y1, x2, y2, w_img, h_img = map(int, face_data[0])
+                                resized_img = full_img.resize((w_img, h_img), Image.Resampling.LANCZOS)
 
+                                # Clamp coordonnées
+                                x1 = max(0, min(x1, w_img))
+                                x2 = max(0, min(x2, w_img))
+                                y1 = max(0, min(y1, h_img))
+                                y2 = max(0, min(y2, h_img))
 
-                            resized_img = full_img.resize((w_img, h_img),Image.Resampling.LANCZOS)
+                                if x2 > x1 and y2 > y1:
+                                    cropped_face = resized_img.crop((x1, y1, x2, y2))
+                                    st.image(cropped_face, caption="🎨 Face from painting")
+                                else:
+                                    st.warning("⚠️ Coordonnées invalides après clamp")
 
-                            x1 = max(0, min(x1, w_img))
-                            x2 = max(0, min(x2, w_img))
-                            y1 = max(0, min(y1, h_img))
-                            y2 = max(0, min(y2, h_img))
-
-                            if x2 > x1 and y2 > y1:
-                                cropped_face = resized_img.crop((x1, y1, x2, y2))
-
-                                st.image(cropped_face, caption="🎨 Face from painting")
-
+                                # 👉 Affichage du tableau complet en dernier
+                                st.image(resized_img, caption="🖼️ Full painting", use_container_width=True)
 
                             else:
-                                st.warning("⚠️ Coordonnées invalides après clamp")
-
-                            #st.image(resized_img, caption="🖼️ Original painting (resized)", width=300)
-
+                                st.warning(f"⚠️ Image introuvable (code {response_img.status_code})")
                         except Exception as e:
                             st.warning(f"Erreur image WikiArt : {e}")
 
-                    else:
-                        # 🗂️ Cas local
-                        face_path = match.get("painting_face_path")
-                        painting_path = match.get("original_painting_path")
-
-                        if face_path and os.path.exists(face_path):
-                            try:
-                                with open(face_path, "rb") as f:
-                                    face_img = Image.open(f)
-                                    st.image(face_img, caption="🎨 Face from painting (local)", width=300)
-                            except Exception as e:
-                                st.warning(f"Erreur chargement visage local : {e}")
-
-                        if painting_path and os.path.exists(painting_path):
-                            try:
-                                with open(painting_path, "rb") as f:
-                                    painting_img = Image.open(f)
-                                    st.image(painting_img, caption="🖼️ Original painting (local)", width=300)
-                            except Exception as e:
-                                st.warning(f"Erreur chargement peinture locale : {e}")
-
-                    # 🧍‍♂️ Visage de la photo de départ
-                    if cropped_input_face:
-
-                        response_img = requests.get(image_url)
-                        full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
-                        st.image(full_img, caption="🖼️ Original painting")
 
 
                 with col2:
-                    st.image(cropped_input_face, caption="👤 Your face (input)")
-
-
-
+                    if cropped_input_face:
+                        st.image(cropped_input_face, caption="👤 Your face (input)")
 
                 with col3:
                     st.markdown(f"**🎨 Titre :** *{match['original_painting_title']}*")
                     st.markdown(f"**👨‍🎨 Artiste :** {match['original_painting_artist']}")
-                    if match.get("original_painting_wikiart_link"):
-                        st.markdown(f"[🔗 Voir sur WikiArt]({match['original_painting_wikiart_link']})")
-                    st.write(f"📊 Similarité : {match['similarity']}")
+
+                    wikiart_link = match.get("original_painting_wikiart_link")
+                    if wikiart_link:
+                        try:
+                            response = requests.head(wikiart_link, timeout=5)
+                            if response.status_code == 200:
+                                st.markdown(f"[🔗 Voir sur WikiArt]({wikiart_link})")
+                        except requests.RequestException:
+                            pass  # Ne rien afficher si le lien ne fonctionne pas ou plante
+
+                    st.write(f"📊 Distance : {match['similarity']}")
+        else:
+            st.error("❌ Erreur lors de la communication avec l’API.")
