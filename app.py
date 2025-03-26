@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 import requests
 from PIL import Image
@@ -36,7 +35,7 @@ BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
 url = BASE_URI + 'upload_image'
 
 # 📤 Upload
-uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png","jfif"])
 
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
