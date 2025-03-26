@@ -1,48 +1,158 @@
 import os
 import streamlit as st
+import requests
+from PIL import Image
+from io import BytesIO
+
+st.markdown(
+        """
+    <style>
+    .stAppx {
+        background-color:  #173679 ;
+    }
+
+      .stTitle {
+
+        background-color:  #ACB1D6 ;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True)
+col1, col2 = st.columns([1, 1])
+
+with col1:
+        st.title("DeLorean Art 🎨")
+        st.markdown("#### Dive into history and discover yourself in its artistic works.")
+
+with col2:
+        image = Image.open("img/DeloreanV.jpg")
+        st.image(image, use_container_width=True)
 
 
-# Define the base URI of the API
-#   - Potential sources are in `.streamlit/secrets.toml` or in the Secrets section
-#     on Streamlit Cloud
-#   - The source selected is based on the shell variable passend when launching streamlit
-#     (shortcuts are included in Makefile). By default it takes the cloud API url
+#st.set_page_config(layout="wide")
+#st.title("🎨 DeLorean Art Program ")
+
+# Détection de l'URL d'API
 if 'API_URI' in os.environ:
     BASE_URI = st.secrets[os.environ.get('API_URI')]
 else:
     BASE_URI = st.secrets['cloud_api_uri']
-# Add a '/' at the end if it's not there
+    BASE_URI = st.secrets['local_api_uri']
+
 BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
-# Define the url to be used by requests.get to get a prediction (adapt if needed)
-url = BASE_URI + 'predict'
+url = BASE_URI + 'upload_image'
 
-# Just displaying the source for the API. Remove this in your final version.
-st.markdown(f"Working with {url}")
+uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png"])
 
-st.markdown("Now, the rest is up to you. Start creating your page.")
-
-
-# TODO: Add some titles, introduction, ...
-
-
-# TODO: Request user input
+if uploaded_file:
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Ready for time travel", width=300)
+    category = st.selectbox("Select Category",("full","modern_abstract","diverse","cubism","art_asiatique","realism_impressionism","renaissance_baroque","romanticism_art_nouveau","styles_recents"))
+    matches = st.selectbox("Pick matches:",("3","5","10"))
+    model = st.selectbox("Pick Model:",("512","ghost"))
 
 
-# TODO: Call the API using the user's input
-#   - url is already defined above
-#   - create a params dict based on the user's input
-#   - finally call your API using the requests package
+    if st.button("🔍 Fire up the DeLorean! ⚡🕒🚗"):
+        with st.spinner("The flux capacitor is fluxing..."):
+            files = {"img": uploaded_file.getvalue()}
+            response = requests.post(url, files={"img": files["img"]},data={"matches": matches,"model":model,"category":category })
+
+        if response.status_code == 200:
+            data = response.json()
+            st.success("Great Scott!")
+
+            neighbors = data["neighbors"]
+            input_coords = data.get("input_photo_coordinates", [])
+            cropped_input_face = None
+
+            # 🧠 Extraire le visage croppé de la photo utilisateur
+            if input_coords and len(input_coords) == 4:
+                x1, y1, x2, y2 = input_coords
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(image.width, x2), min(image.height, y2)
+
+                if x2 > x1 and y2 > y1:
+                    cropped_input_face = image.crop((x1, y1, x2, y2))
+
+            st.markdown("🧑‍🎨 Here are your matches!")
+
+            for i, match in enumerate(neighbors, start=1):
+                st.markdown(f"---\n### 🖼️ Match #{i}")
+                col1, col2, col3 = st.columns([1, 1 , 2])
+
+                with col1:
+                    image_url = match.get("original_painting_image_url")
+                    face_data = match.get("face_coordinates", [])
 
 
-# TODO: retrieve the results
-#   - add a little check if you got an ok response (status code 200) or something else
-#   - retrieve the prediction from the JSON
+                    if image_url and face_data:
+                        try:
+                            x1, y1, x2, y2, w_img, h_img = map(int,face_data[0])
+
+                            response_img = requests.get(image_url)
+                            full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
 
 
-# TODO: display the prediction in some fancy way to the user
+                            resized_img = full_img.resize((w_img, h_img),Image.Resampling.LANCZOS)
+
+                            x1 = max(0, min(x1, w_img))
+                            x2 = max(0, min(x2, w_img))
+                            y1 = max(0, min(y1, h_img))
+                            y2 = max(0, min(y2, h_img))
+
+                            if x2 > x1 and y2 > y1:
+                                cropped_face = resized_img.crop((x1, y1, x2, y2))
+
+                                st.image(cropped_face, caption="🎨 Face from painting")
 
 
-# TODO: [OPTIONAL] maybe you can add some other pages?
-#   - some statistical data you collected in graphs
-#   - description of your product
-#   - a 'Who are we?'-page
+                            else:
+                                st.warning("⚠️ Coordonnées invalides après clamp")
+
+                            #st.image(resized_img, caption="🖼️ Original painting (resized)", width=300)
+
+                        except Exception as e:
+                            st.warning(f"Erreur image WikiArt : {e}")
+
+                    else:
+                        # 🗂️ Cas local
+                        face_path = match.get("painting_face_path")
+                        painting_path = match.get("original_painting_path")
+
+                        if face_path and os.path.exists(face_path):
+                            try:
+                                with open(face_path, "rb") as f:
+                                    face_img = Image.open(f)
+                                    st.image(face_img, caption="🎨 Face from painting (local)", width=300)
+                            except Exception as e:
+                                st.warning(f"Erreur chargement visage local : {e}")
+
+                        if painting_path and os.path.exists(painting_path):
+                            try:
+                                with open(painting_path, "rb") as f:
+                                    painting_img = Image.open(f)
+                                    st.image(painting_img, caption="🖼️ Original painting (local)", width=300)
+                            except Exception as e:
+                                st.warning(f"Erreur chargement peinture locale : {e}")
+
+                    # 🧍‍♂️ Visage de la photo de départ
+                    if cropped_input_face:
+
+                        response_img = requests.get(image_url)
+                        full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
+                        st.image(full_img, caption="🖼️ Original painting")
+
+
+                with col2:
+                    st.image(cropped_input_face, caption="👤 Your face (input)")
+
+
+
+
+                with col3:
+                    st.markdown(f"**🎨 Titre :** *{match['original_painting_title']}*")
+                    st.markdown(f"**👨‍🎨 Artiste :** {match['original_painting_artist']}")
+                    if match.get("original_painting_wikiart_link"):
+                        st.markdown(f"[🔗 Voir sur WikiArt]({match['original_painting_wikiart_link']})")
+                    st.write(f"📊 Similarité : {match['similarity']}")
