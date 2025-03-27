@@ -29,13 +29,12 @@ with col2:
     image = Image.open("img/DeloreanV.jpg")
     st.image(image, use_container_width=True)
 
-BASE_URI = st.secrets.get('cloud_api_uri')
-
+BASE_URI = st.secrets.get('cloud_api_uri')  # ou local_api_uri
 BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
 url = BASE_URI + 'upload_image'
 
 # 📤 Upload
-uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png","jfif"])
+uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png", "jfif"])
 
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
@@ -45,10 +44,10 @@ if uploaded_file:
         "full", "modern_abstract", "diverse", "cubism",
         "art_asiatique", "realism_impressionism", "renaissance_baroque",
         "romanticism_art_nouveau", "styles_recents"
-    ))
+    ),index=0)
 
-    matches = st.selectbox("Pick matches :", ("3", "5", "10"))
-    model = st.selectbox("Pick Model :", ("512", "ghost"))
+    matches = st.selectbox("Pick matches :", ("3", "5", "10"),index=2)
+    model = st.selectbox("Pick Model :", ("512", "ghost"),index=0)
 
     if st.button("🔍 Fire up the DeLorean! ⚡🕒🚗"):
         with st.spinner("The flux capacitor is fluxing..."):
@@ -61,7 +60,7 @@ if uploaded_file:
 
         if response.status_code == 200:
             data = response.json()
-            st.success("Great Scott!")
+            st.success("Great Scott! Nom de Zeus!")
 
             neighbors = data["neighbors"]
             input_coords = data.get("input_photo_coordinates", [])
@@ -83,39 +82,39 @@ if uploaded_file:
                 col1, col2, col3 = st.columns([1, 1, 2])
 
                 with col1:
-                    image_url = match.get("original_painting_image_url")
                     face_data = match.get("face_coordinates", [])
+                    image_url = match.get("original_painting_image_url")
 
-                    if image_url and face_data:
+                    if image_url:
                         try:
                             response_img = requests.get(image_url, timeout=5)
 
                             if response_img.status_code == 200:
                                 full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
-                                x1, y1, x2, y2, w_img, h_img = map(int, face_data[0])
-                                resized_img = full_img.resize((w_img, h_img), Image.Resampling.LANCZOS)
+                                st.image(full_img, caption="🖼️ Full painting", use_container_width=True)
 
-                                # Clamp coordonnées
-                                x1 = max(0, min(x1, w_img))
-                                x2 = max(0, min(x2, w_img))
-                                y1 = max(0, min(y1, h_img))
-                                y2 = max(0, min(y2, h_img))
+                                # Si coordonnées de visage disponibles
+                                if face_data:
+                                    try:
+                                        x1, y1, x2, y2, w_img, h_img = map(int, face_data[0])
+                                        resized_img = full_img.resize((w_img, h_img), Image.Resampling.LANCZOS)
 
-                                if x2 > x1 and y2 > y1:
-                                    cropped_face = resized_img.crop((x1, y1, x2, y2))
-                                    st.image(cropped_face, caption="🎨 Face from painting")
-                                else:
-                                    st.warning("⚠️ Coordonnées invalides après clamp")
+                                        x1 = max(0, min(x1, w_img))
+                                        x2 = max(0, min(x2, w_img))
+                                        y1 = max(0, min(y1, h_img))
+                                        y2 = max(0, min(y2, h_img))
 
-                                # 👉 Affichage du tableau complet en dernier
-                                st.image(resized_img, caption="🖼️ Full painting", use_container_width=True)
-
+                                        if x2 > x1 and y2 > y1:
+                                            cropped_face = resized_img.crop((x1, y1, x2, y2))
+                                            st.image(cropped_face, caption="🎨 Face from painting")
+                                        else:
+                                            st.warning("⚠️ Coordonnées invalides après clamp")
+                                    except Exception as e:
+                                        st.warning(f"Erreur découpe visage : {e}")
                             else:
                                 st.warning(f"⚠️ Image introuvable (code {response_img.status_code})")
                         except Exception as e:
                             st.warning(f"Erreur image WikiArt : {e}")
-
-
 
                 with col2:
                     if cropped_input_face:
