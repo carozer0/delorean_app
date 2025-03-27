@@ -29,7 +29,7 @@ with col2:
     image = Image.open("img/DeloreanV.jpg")
     st.image(image, use_container_width=True)
 
-BASE_URI = st.secrets.get('local_api_uri')  # ou cloud_api_uri
+BASE_URI = st.secrets.get('cloud_api_uri')  # ou local_api_uri
 BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
 url = BASE_URI + 'upload_image'
 
