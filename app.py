@@ -7,12 +7,17 @@ from io import BytesIO
 st.markdown(
     """
     <style>
-    .stAppx {
-        background-color:  #173679 ;
+    [class^="st-"] {
+        color: #19426b;
     }
-    .stTitle {
-        background-color:  #ACB1D6 ;
+
+    .stApp{
+        color: #1B263B;
     }
+    .stTitle  {
+        color:  #1B263B;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -23,31 +28,42 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     st.title("DeLorean Art 🎨")
-    st.markdown("#### Dive into history and discover yourself in its artistic works.")
+    st.markdown("#### _Dive into history and discover yourself in its artistic works._")
 
 with col2:
     image = Image.open("img/DeloreanV.jpg")
     st.image(image, use_container_width=True)
 
 BASE_URI = st.secrets.get('cloud_api_uri')  # ou local_api_uri
+#BASE_URI = st.secrets.get('local_api_uri')  # ou local_api_uri
 BASE_URI = BASE_URI if BASE_URI.endswith('/') else BASE_URI + '/'
 url = BASE_URI + 'upload_image'
 
+
 # 📤 Upload
+consent = st.checkbox("I consent to analize my picture for face recognition.")
 uploaded_file = st.file_uploader("Who's ready to hop in the DeLorean?", type=["jpg", "jpeg", "png", "jfif"])
 
-if uploaded_file:
+if uploaded_file and consent:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Ready for time travel", width=300)
 
-    category = st.selectbox("Select Category :", (
+    col1, col2, col3 = st.columns(3)
+
+
+
+    with col1:
+        category = st.selectbox("Select Category :", (
         "full", "modern_abstract", "diverse", "cubism",
         "art_asiatique", "realism_impressionism", "renaissance_baroque",
         "romanticism_art_nouveau", "styles_recents"
     ),index=0)
 
-    matches = st.selectbox("Pick matches :", ("3", "5", "10"),index=2)
-    model = st.selectbox("Pick Model :", ("512", "ghost"),index=0)
+    with col2:
+        matches = st.selectbox("Pick matches :", ("3", "5", "10"),index=2)
+    with col3:
+        model = st.selectbox("Pick Model :", ("512", "ghost"),index=0)
+
 
     if st.button("🔍 Fire up the DeLorean! ⚡🕒🚗"):
         with st.spinner("The flux capacitor is fluxing..."):
@@ -91,7 +107,6 @@ if uploaded_file:
 
                             if response_img.status_code == 200:
                                 full_img = Image.open(BytesIO(response_img.content)).convert("RGB")
-                                st.image(full_img, caption="🖼️ Full painting", use_container_width=True)
 
                                 # Si coordonnées de visage disponibles
                                 if face_data:
@@ -111,6 +126,8 @@ if uploaded_file:
                                             st.warning("⚠️ Coordonnées invalides après clamp")
                                     except Exception as e:
                                         st.warning(f"Erreur découpe visage : {e}")
+                                    st.image(full_img, caption="🖼️ Full painting", use_container_width=True)
+
                             else:
                                 st.warning(f"⚠️ Image introuvable (code {response_img.status_code})")
                         except Exception as e:
@@ -126,12 +143,16 @@ if uploaded_file:
 
                     wikiart_link = match.get("original_painting_wikiart_link")
                     if wikiart_link:
-                        try:
-                            response = requests.head(wikiart_link, timeout=5)
-                            if response.status_code == 200:
-                                st.markdown(f"[🔗 Voir sur WikiArt]({wikiart_link})")
-                        except requests.RequestException:
-                            pass  # Ne rien afficher si le lien ne fonctionne pas ou plante
+                        st.markdown(f"[🔗 Voir sur WikiArt]({wikiart_link})")
+
+                        #try:
+                        #    response = requests.head(wikiart_link, timeout=5)
+                        #    if response.status_code == 200:
+                        #        st.markdown(f"[🔗 Voir sur WikiArt]({wikiart_link})")
+                        #except requests.RequestException:
+                        #    pass  # Ne rien afficher si le lien ne fonctionne pas ou plante
+
+
 
                     st.write(f"📊 Distance : {match['similarity']}")
         else:
