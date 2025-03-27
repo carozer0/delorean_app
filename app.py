@@ -48,8 +48,8 @@ if uploaded_file and consent:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Ready for time travel", width=300)
 
-    col1, col2, col3 = st.columns(3)
 
+    col1, col2, col3 = st.columns([2, 1, 1])
 
 
     with col1:
